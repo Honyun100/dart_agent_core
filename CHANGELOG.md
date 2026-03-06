@@ -1,3 +1,10 @@
+## 1.0.1
+
+- Add `ClaudeClient` for direct Anthropic Messages API support (no AWS Bedrock required).
+- Add examples for Ollama and OpenRouter usage via `OpenAIClient`.
+- Add Claude example with `ClaudeClient`.
+- Rename `docs/` to `doc/` and `examples/` to `example/` to follow pub.dev conventions.
+
 ## 1.0.0
 
 - Initial release.

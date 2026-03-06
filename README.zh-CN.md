@@ -37,7 +37,7 @@
 
 ```yaml
 dependencies:
-  dart_agent_core: ^1.0.0
+  dart_agent_core: ^1.0.1
 ```
 
 ---
@@ -233,6 +233,7 @@ final agent = StatefulAgent(
 ```
 
 Agent 通过内置 `delegate_task` 工具进行分派：
+
 - `assignee: 'clone'`：克隆当前 Agent 并使用干净上下文。
 - `assignee: 'researcher'`：调用已注册的命名子 Agent。
 
