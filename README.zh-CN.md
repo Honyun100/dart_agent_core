@@ -23,7 +23,8 @@
 - **多模态输入**：`UserMessage` 支持文本、图片、音频、视频和文档等内容片段。模型输出可包含文本、图片、视频和音频。
 - **有状态会话**：`AgentState` 追踪对话历史、Token 使用量、激活技能、计划与自定义元数据。`FileStateStorage` 可将状态以 JSON 持久化到磁盘。
 - **流式输出**：`runStream()` 会产出 `StreamingEvent`，包含模型分片、工具调用请求/结果、重试等事件，适合 Flutter 实时 UI。
-- **技能系统**：可定义模块化能力（`Skill`），每个技能包含独立系统提示词与工具。技能可设为常驻（`forceActivate`）或运行时动态开关，节省上下文窗口。
+- **纯Dart Skill**：可定义模块化能力（`Skill`），每个 Skill 包含独立 system prompt 与工具。Skill 可设为常驻（`forceActivate`）或在运行时动态开关，以节省上下文窗口。
+- **基于文件的 Skill**：可从本地目录中的 `SKILL.md` 动态加载 Skill。配置 `javaScriptRuntime` 后，这类 Skill 可通过 `RunJavaScript` 执行 JavaScript 脚本，并支持 bridge 扩展。
 - **子 Agent 委派**：支持注册命名子 Agent，或使用 `clone` 克隆 Worker Agent，并在隔离上下文中执行任务。
 - **规划能力**：可选 `PlanMode` 会注入 `write_todos` 工具，让 Agent 在执行过程中维护步骤化任务清单。
 - **上下文压缩**：`LLMBasedContextCompressor` 会在 Token 超阈值时将旧消息总结为情节记忆（episodic memory），并可通过内置 `retrieve_memory` 工具回溯原始消息。
@@ -183,9 +184,18 @@ Future<AgentToolResult> generateChart(String query) async {
 
 ---
 
-## 技能系统
+## Skill 系统
 
-`Skill` 是模块化能力单元，由系统提示词与可选工具组成。Agent 可在运行时激活/停用技能，使上下文更聚焦。
+`dart_agent_core` 支持两种 Skill 类型：
+
+1) **纯 Dart Skill**（`Skill` 对象）
+2) **基于文件的 Skill**（从目录动态发现 `SKILL.md`）
+
+两种模式在 `StatefulAgent` 中互斥（每个 Agent 实例只能二选一）。
+
+### 纯 Dart Skill
+
+纯 Dart Skill 是模块化能力单元，由系统提示词与可选工具组成。Agent 可在运行时激活/停用 Skill，使上下文更聚焦。
 
 ```dart
 class CodeReviewSkill extends Skill {
@@ -205,6 +215,65 @@ final agent = StatefulAgent(
 
 - **动态技能**（默认）：初始不激活。Agent 会获得 `activate_skills` / `deactivate_skills` 工具，根据任务动态切换。
 - **常驻技能**（`forceActivate: true`）：始终激活，不能停用。
+
+### 基于文件的 Skill（`SKILL.md`）
+
+基于文件的 Skill 模式会从本地目录加载 Skill：先发现可用 Skill，再按需读取 `SKILL.md`，激活后将 Skill 内容注入对话上下文。
+
+```dart
+final agent = StatefulAgent(
+  ...
+  // 宿主应用需提供文件工具（例如 Read、LS）
+  tools: [readTool, lsTool],
+  skillDirectoryPath: '/absolute/path/to/skills_root',
+  javaScriptRuntime: NodeJavaScriptRuntime(), // 可选，开启 RunJavaScript 能力
+  skills: null, // 与 skillDirectoryPath 不能同时使用
+);
+```
+
+当基于文件的 Skill 模式下配置了 `javaScriptRuntime`，框架会暴露 `RunJavaScript` 工具。
+
+#### 在 Flutter 中配置 `RunJavaScript`
+
+在 Flutter 应用里，你需要实现一个自定义 `JavaScriptRuntime`（例如基于 `flutter_js`），并注入到 `StatefulAgent`。
+
+1. 在 Flutter 工程添加依赖：
+
+```yaml
+dependencies:
+  flutter_js: ^0.8.7
+```
+
+2. 实现并注入 `JavaScriptRuntime`：
+
+```dart
+import 'package:dart_agent_core/dart_agent_core.dart';
+import 'package:flutter_js/flutter_js.dart' as flutter_js;
+
+final agent = StatefulAgent(
+  ...
+  skillDirectoryPath: '/absolute/path/to/skills_root',
+  javaScriptRuntime: FlutterJavaScriptRuntime(
+    runtime: flutter_js.getJavascriptRuntime(),
+  ),
+);
+```
+
+3. （可选）注册桥接通道，扩展本地能力：
+
+```dart
+agent.registerJavaScriptBridgeChannel('local.greeting', (payload, context) {
+  final name = (payload['name'] ?? 'friend').toString();
+  return {'message': 'Hello, $name'};
+});
+```
+
+参考实现：
+- 查看 `lib/src/agent/javascript_runtime.dart`（注释中的 `FlutterJavaScriptRuntime` 完整示例）。
+
+桥接通道可由宿主应用扩展：
+- `registerJavaScriptBridgeChannel(channel, handler)`
+- `unregisterJavaScriptBridgeChannel(channel)`
 
 ---
 
@@ -364,6 +433,7 @@ final agent = StatefulAgent(
 - [跨会话状态持久化](examples/simple_agent_with_state_example.dart)
 - [使用 write_todos 做规划](examples/simple_agent_with_plan_example.dart)
 - [动态技能系统](examples/simple_agent_with_skills_example.dart)
+- [基于文件的 Skill + JavaScript 脚本执行](examples/simple_agent_with_directory_skills_example.dart)
 - [子 Agent 委派](examples/simple_agent_with_sub_agent_example.dart)
 - [控制器钩子（观测与拦截）](examples/simple_agent_with_controller_example.dart)
 - [Bedrock 下的 Claude Extended Thinking](examples/simple_agent_with_thinking_example.dart)

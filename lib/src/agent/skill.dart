@@ -443,7 +443,7 @@ List<DirectorySkillMetadata> collectExplicitDirectorySkillMentions(
     if (selectedPaths.add(path)) selected.add(skill);
   }
 
-  // Codex-style fallback: allow plain-text skill-name references even without
+  // fallback: allow plain-text skill-name references even without
   // `$skill_name` syntax when the match is unambiguous.
   for (final message in messages) {
     if (message is! UserMessage) continue;

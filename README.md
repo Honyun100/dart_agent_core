@@ -23,7 +23,8 @@
 - **Multimodal input**: `UserMessage` accepts text, images, audio, video, and documents as content parts. Model responses can include text, images, video, and audio.
 - **Stateful sessions**: `AgentState` tracks conversation history, token usage, active skills, plan, and custom metadata. `FileStateStorage` persists state to disk as JSON.
 - **Streaming**: `runStream()` yields `StreamingEvent`s for model chunks, tool call requests/results, and retries — suitable for real-time UI updates in Flutter.
-- **Skill system**: Define modular capabilities (`Skill`) with their own system prompts and tools. Skills can be always-on (`forceActivate`) or toggled dynamically by the agent at runtime to save context window.
+- **Pure Dart Skills**: Define modular capabilities (`Skill`) with their own system prompts and tools. Skills can be always-on (`forceActivate`) or toggled dynamically by the agent at runtime to save context window.
+- **File-system Skills**: Load Skills from `SKILL.md` files under a local directory root. With `javaScriptRuntime` configured, these Skills can execute JavaScript scripts via `RunJavaScript` and bridge channels.
 - **Sub-agent delegation**: Register named sub-agents or use `clone` to delegate tasks to a worker agent with an isolated context.
 - **Planning**: Optional `PlanMode` injects a `write_todos` tool that lets the agent maintain a step-by-step task list during execution.
 - **Context compression**: `LLMBasedContextCompressor` summarizes old messages into episodic memory when the token count exceeds a threshold. The agent can recall original messages via the built-in `retrieve_memory` tool.
@@ -185,7 +186,16 @@ See [Tools & Planning doc](doc/tools_and_planning.md) for positional/named param
 
 ## Skill System
 
-Skills are modular capability units — a system prompt plus optional tools bundled under a name. The agent can activate/deactivate skills at runtime to keep the context window focused.
+`dart_agent_core` supports two Skill types:
+
+1) **Pure Dart Skills** (`Skill` objects)
+2) **File-system Skills** (`SKILL.md` files discovered from a root directory)
+
+These two modes are mutually exclusive in `StatefulAgent` (use one or the other per agent instance).
+
+### Pure Dart Skills
+
+Pure Dart Skills are modular capability units — a system prompt plus optional tools bundled under a name. The agent can activate/deactivate Skills at runtime to keep the context window focused.
 
 ```dart
 class CodeReviewSkill extends Skill {
@@ -205,6 +215,65 @@ final agent = StatefulAgent(
 
 - **Dynamic skills** (default): Start inactive. The agent gains `activate_skills` / `deactivate_skills` tools to toggle them based on the current task.
 - **Always-on skills** (`forceActivate: true`): Permanently active, cannot be deactivated.
+
+### File-system Skills (`SKILL.md`)
+
+File-system Skill mode loads Skills from local folders: discover available Skills, read `SKILL.md` on demand, and inject Skill content into conversation context when activated.
+
+```dart
+final agent = StatefulAgent(
+  ...
+  // Required file tools should be provided by host app (for example: Read, LS).
+  tools: [readTool, lsTool],
+  skillDirectoryPath: '/absolute/path/to/skills_root',
+  javaScriptRuntime: NodeJavaScriptRuntime(), // optional, enables RunJavaScript
+  skills: null, // do not use with skillDirectoryPath
+);
+```
+
+When `javaScriptRuntime` is configured in File-system Skill mode, the framework exposes `RunJavaScript`.
+
+#### Flutter configuration for `RunJavaScript`
+
+In Flutter apps, configure a custom `JavaScriptRuntime` implementation (for example using `flutter_js`) and pass it to `StatefulAgent`.
+
+1. Add dependency in your Flutter app:
+
+```yaml
+dependencies:
+  flutter_js: ^0.8.7
+```
+
+2. Implement `JavaScriptRuntime` and inject it:
+
+```dart
+import 'package:dart_agent_core/dart_agent_core.dart';
+import 'package:flutter_js/flutter_js.dart' as flutter_js;
+
+final agent = StatefulAgent(
+  ...
+  skillDirectoryPath: '/absolute/path/to/skills_root',
+  javaScriptRuntime: FlutterJavaScriptRuntime(
+    runtime: flutter_js.getJavascriptRuntime(),
+  ),
+);
+```
+
+3. (Optional) Register bridge channels for native capabilities:
+
+```dart
+agent.registerJavaScriptBridgeChannel('local.greeting', (payload, context) {
+  final name = (payload['name'] ?? 'friend').toString();
+  return {'message': 'Hello, $name'};
+});
+```
+
+Reference implementation:
+- See `lib/src/agent/javascript_runtime.dart` (the commented `FlutterJavaScriptRuntime` example).
+
+Bridge channels can be extended by host apps via:
+- `registerJavaScriptBridgeChannel(channel, handler)`
+- `unregisterJavaScriptBridgeChannel(channel)`
 
 ---
 
@@ -364,6 +433,7 @@ See the [`example/`](example) directory:
 - [Persistent state across sessions](example/simple_agent_with_state_example.dart)
 - [Planning with write_todos](example/simple_agent_with_plan_example.dart)
 - [Dynamic skill system](example/simple_agent_with_skills_example.dart)
+- [File-system Skills + JavaScript scripts execute](example/simple_agent_with_directory_skills_example.dart)
 - [Sub-agent delegation](example/simple_agent_with_sub_agent_example.dart)
 - [Controller hooks (observe & block)](example/simple_agent_with_controller_example.dart)
 - [Claude extended thinking via Bedrock](example/simple_agent_with_thinking_example.dart)
