@@ -25,3 +25,4 @@ export 'src/agent/events.dart';
 export 'src/agent/exception.dart';
 export 'src/agent/sub_agent.dart';
 export 'src/agent/loop_detector.dart';
+export 'src/agent/javascript_runtime.dart';

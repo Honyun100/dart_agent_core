@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:dart_agent_core/src/agent/controller.dart';
 import 'package:dart_agent_core/src/agent/events.dart';
 import 'package:dart_agent_core/src/agent/exception.dart';
+import 'package:dart_agent_core/src/agent/javascript_runtime.dart';
 import 'package:dart_agent_core/src/agent/loop_detector.dart';
 import 'package:dart_agent_core/src/agent/skill.dart';
 import 'package:dart_agent_core/src/agent/sub_agent.dart';
@@ -262,6 +264,14 @@ class StatefulAgent {
   late final Planner _planner;
   final PlanMode? planMode;
   final List<Skill>? skills;
+
+  /// Directory-mode skills root path (SKILL.md).
+  ///
+  /// This mode is mutually exclusive with [skills].
+  /// You must provide the agent with read, LS, and other file-operation tools yourself; otherwise directory skill functionality will not work.
+  final String? skillDirectoryPath;
+  final JavaScriptRuntime? javaScriptRuntime;
+  final JavaScriptBridgeRegistry? javaScriptBridgeRegistry;
   final List<SubAgent>? subAgents;
   final bool disableSubAgents;
   final bool withGeneralPrinciples;
@@ -270,6 +280,8 @@ class StatefulAgent {
   late final LoopDetector loopDetector;
   final Function(AgentState state)? autoSaveStateFunc;
   final SystemCallback? systemCallback;
+  List<DirectorySkillMetadata> _directorySkills = [];
+  late final JavaScriptBridgeRegistry _jsBridgeRegistry;
 
   StatefulAgent({
     required this.name,
@@ -282,6 +294,9 @@ class StatefulAgent {
     this.compressor,
     this.planMode,
     this.skills,
+    this.skillDirectoryPath,
+    this.javaScriptRuntime,
+    this.javaScriptBridgeRegistry,
     this.subAgents,
     this.withGeneralPrinciples = true,
     this.autoSaveStateFunc,
@@ -290,8 +305,16 @@ class StatefulAgent {
     this.isSubAgent = false,
     this.disableSubAgents = false,
     this.systemCallback,
-  }) : systemPrompts = systemPrompts ?? [] {
+  }) : assert(
+         skills == null ||
+             skills.isEmpty ||
+             skillDirectoryPath == null ||
+             skillDirectoryPath == '',
+         'skills and skillDirectoryPath cannot be enabled at the same time',
+       ),
+       systemPrompts = systemPrompts ?? [] {
     _planner = Planner(this, controller);
+    _jsBridgeRegistry = javaScriptBridgeRegistry ?? JavaScriptBridgeRegistry();
     this.loopDetector =
         loopDetector ??
         DefaultLoopDetector(
@@ -325,7 +348,15 @@ class StatefulAgent {
     }
 
     // 3. Skills
-    if (skills != null && skills!.isNotEmpty) {
+    if (_isDirectorySkillModeEnabled) {
+      final skillInstruction = buildDirectorySkillsSystemPrompt(
+        _directorySkills,
+        javaScriptExecutionEnabled: javaScriptRuntime != null,
+      );
+      if (skillInstruction != null) {
+        parts.add(skillInstruction);
+      }
+    } else if (skills != null && skills!.isNotEmpty) {
       final skillInstruction = buildSkillSystemPrompt(state, skills);
       if (skillInstruction != null) {
         parts.add(skillInstruction);
@@ -367,8 +398,8 @@ class StatefulAgent {
       toolsCopy.addAll(_planner.tools);
     }
 
-    // 2. Inject skill tools
-    if (skills != null && skills!.isNotEmpty) {
+    // 2. Inject skill tools (legacy in-memory skills only)
+    if (!_isDirectorySkillModeEnabled && skills != null && skills!.isNotEmpty) {
       // Only inject skill operation tools if not all skills are force activate
       if (!skills!.every((s) => s.forceActivate)) {
         toolsCopy.addAll(skillOperationTools);
@@ -388,6 +419,43 @@ class StatefulAgent {
       }
     }
 
+    if (_isDirectorySkillModeEnabled && javaScriptRuntime != null) {
+      toolsCopy.add(
+        Tool(
+          name: 'RunJavaScript',
+          description:
+              'Execute a JavaScript (.js) script from the directory skill workspace.',
+          executable:
+              (
+                String script_path,
+                String? args,
+                int? timeout_ms,
+              ) => _runJavaScriptScript(script_path, args, timeout_ms),
+          parameters: {
+            'type': 'object',
+            'properties': {
+              'script_path': {
+                'type': 'string',
+                'description':
+                    'Absolute path to a JavaScript file.',
+              },
+              'args': {
+                'type': 'string',
+                'description':
+                    'Optional JSON object string (for example: {"xx":"yy"}). The framework deserializes it, and JavaScript reads fields from `ctx.args` directly (for example: `ctx.args.xx`).',
+              },
+              'timeout_ms': {
+                'type': 'integer',
+                'description':
+                    'Optional timeout in milliseconds. Default 30000.',
+              },
+            },
+            'required': ['script_path'],
+          },
+        ),
+      );
+    }
+
     // 3. Inject sub agent tools
     if (!isSubAgentMode(state)) {
       if (!disableSubAgents) {
@@ -401,6 +469,132 @@ class StatefulAgent {
     }
 
     return toolsCopy;
+  }
+
+  bool get _isDirectorySkillModeEnabled =>
+      (skillDirectoryPath?.trim().isNotEmpty ?? false);
+
+  void registerJavaScriptBridgeChannel(
+    String channel,
+    JavaScriptBridgeHandler handler,
+  ) {
+    _jsBridgeRegistry.register(channel, handler);
+  }
+
+  void unregisterJavaScriptBridgeChannel(String channel) {
+    _jsBridgeRegistry.unregister(channel);
+  }
+
+  Future<String> _runJavaScriptScript(
+    String scriptPath,
+    String? args,
+    int? timeoutMs,
+  ) async {
+    if (!_isDirectorySkillModeEnabled) {
+      return 'Error: directory skill mode is not enabled.';
+    }
+    if (javaScriptRuntime == null) {
+      return 'Error: JavaScript runtime is not configured.';
+    }
+    if (!_isAbsolutePath(scriptPath)) {
+      return 'Error: script_path must be an absolute path.';
+    }
+
+    final root = Directory(skillDirectoryPath!).absolute.path;
+    final rootWithSep = root.endsWith(Platform.pathSeparator)
+        ? root
+        : '$root${Platform.pathSeparator}';
+    final resolvedAbsolute = File(scriptPath).absolute.path;
+    if (resolvedAbsolute != root && !resolvedAbsolute.startsWith(rootWithSep)) {
+      return 'Error: script path must stay under skillDirectoryPath.';
+    }
+    if (!resolvedAbsolute.toLowerCase().endsWith('.js')) {
+      return 'Error: only .js script files are supported.';
+    }
+    final scriptFile = File(resolvedAbsolute);
+    if (!scriptFile.existsSync()) {
+      return 'Error: script file not found: $scriptPath';
+    }
+    Map<String, dynamic>? parsedArgs;
+    if (args != null && args.trim().isNotEmpty) {
+      try {
+        final decoded = jsonDecode(args);
+        if (decoded is Map) {
+          parsedArgs = decoded.cast<String, dynamic>();
+        } else {
+          return 'Error: args must be a JSON object string.';
+        }
+      } catch (e) {
+        return 'Error: failed to parse args as JSON object string: $e';
+      }
+    }
+
+    final result = await javaScriptRuntime!.executeFile(
+      scriptPath: resolvedAbsolute,
+      args: parsedArgs,
+      timeout: Duration(milliseconds: timeoutMs ?? 30000),
+      bridgeRegistry: _jsBridgeRegistry,
+      bridgeContext: JavaScriptBridgeContext(
+        agentName: name,
+        sessionId: state.sessionId,
+        scriptPath: resolvedAbsolute,
+        scriptArgs: parsedArgs ?? <String, dynamic>{},
+      ),
+    );
+
+    return jsonEncode({
+      'success': result.success,
+      if (result.result != null) 'result': result.result,
+      if (result.error != null) 'error': result.error,
+      if (result.stdout.isNotEmpty) 'stdout': result.stdout,
+      if (result.stderr.isNotEmpty) 'stderr': result.stderr,
+    });
+  }
+
+  bool _isAbsolutePath(String path) {
+    final isAbsolute =
+        path.startsWith('/') || (path.length >= 2 && path[1] == ':');
+    return isAbsolute;
+  }
+
+  Future<void> _prepareDirectorySkills(
+    List<LLMMessage> incomingMessages,
+  ) async {
+    if (!_isDirectorySkillModeEnabled) return;
+
+    final root = skillDirectoryPath!.trim();
+    final loaded = await loadDirectorySkillsFromRoot(root);
+    _directorySkills = loaded.skills;
+
+    for (final error in loaded.errors) {
+      _logger.warning(
+        '[$name] directory skill load error (${error.path}): ${error.message}',
+      );
+    }
+
+    if (_directorySkills.isEmpty) {
+      _logger.info('[$name] no directory skills found under: $root');
+      return;
+    }
+
+    final mentionedSkills = collectExplicitDirectorySkillMentions(
+      incomingMessages,
+      _directorySkills,
+    );
+    if (mentionedSkills.isEmpty) {
+      return;
+    }
+
+    final injections = await buildDirectorySkillInjections(mentionedSkills);
+    for (final warning in injections.warnings) {
+      _logger.warning('[$name] $warning');
+    }
+    if (injections.items.isNotEmpty) {
+      state.history.messages.addAll(injections.items);
+      _logger.info(
+        '[$name] injected ${injections.items.length} directory skill instruction message(s)',
+      );
+    }
   }
 
   Future<List<LLMMessage>> resume({bool useStream = true}) async {
@@ -497,6 +691,7 @@ class StatefulAgent {
       if (messages.isNotEmpty) {
         state.history.messages.addAll(messages);
       }
+      await _prepareDirectorySkills(messages);
       state.currentLoopCount = 0;
       state.currentLoopUsages.clear();
       // To prevent infinite loops in streams or complex state, we might limit turns?
@@ -1078,6 +1273,9 @@ class StatefulAgent {
     AgentState state, {
     CancelToken? cancelToken,
   }) async {
+    // TODO(skill-scripts): Directory-skill script execution (especially JS sandbox)
+    // should be integrated here, because this is the central tool-call execution path.
+    // We intentionally do not execute scripts for mobile runtime in this iteration.
     final batchCallId = uuid.v4();
     final futures = calls.map((call) async {
       final tool = tools?.firstWhere(

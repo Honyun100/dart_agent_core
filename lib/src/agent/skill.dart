@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:dart_agent_core/dart_agent_core.dart';
 import 'package:logging/logging.dart';
 
@@ -17,6 +20,39 @@ abstract class Skill {
     this.tools,
     this.forceActivate = false,
   });
+}
+
+class DirectorySkillMetadata {
+  final String name;
+  final String description;
+  final String pathToSkillMd;
+
+  DirectorySkillMetadata({
+    required this.name,
+    required this.description,
+    required this.pathToSkillMd,
+  });
+}
+
+class DirectorySkillLoadError {
+  final String path;
+  final String message;
+
+  DirectorySkillLoadError({required this.path, required this.message});
+}
+
+class DirectorySkillLoadResult {
+  final List<DirectorySkillMetadata> skills;
+  final List<DirectorySkillLoadError> errors;
+
+  DirectorySkillLoadResult({required this.skills, required this.errors});
+}
+
+class DirectorySkillInjections {
+  final List<UserMessage> items;
+  final List<String> warnings;
+
+  DirectorySkillInjections({required this.items, required this.warnings});
 }
 
 final skillOperationTools = [_activateSkillsTool, _deactivateSkillsTool];
@@ -259,4 +295,315 @@ String _deactivateSkills(List<String> skill_names) {
   _logger.info(result.toString());
 
   return result.toString();
+}
+
+Future<DirectorySkillLoadResult> loadDirectorySkillsFromRoot(
+  String rootDirectoryPath, {
+  int maxDepth = 6,
+}) async {
+  final root = Directory(rootDirectoryPath);
+  if (!root.existsSync()) {
+    return DirectorySkillLoadResult(
+      skills: [],
+      errors: [
+        DirectorySkillLoadError(
+          path: rootDirectoryPath,
+          message: 'skill directory does not exist',
+        ),
+      ],
+    );
+  }
+
+  final skills = <DirectorySkillMetadata>[];
+  final errors = <DirectorySkillLoadError>[];
+  final seenPaths = <String>{};
+  final rootAbsolute = root.absolute.path;
+
+  await for (final entity in root.list(recursive: true, followLinks: false)) {
+    if (entity is! File) continue;
+    if (_basename(entity.path) != 'SKILL.md') continue;
+
+    final relativeDepth = _relativeDepth(rootAbsolute, entity.absolute.path);
+    if (relativeDepth > maxDepth) continue;
+
+    final normalized = _normalizePath(entity.absolute.path);
+    if (!seenPaths.add(normalized)) continue;
+
+    try {
+      final metadata = await _parseDirectorySkillFile(entity);
+      skills.add(metadata);
+    } catch (e) {
+      errors.add(
+        DirectorySkillLoadError(path: entity.path, message: e.toString()),
+      );
+    }
+  }
+
+  skills.sort((a, b) => a.name.compareTo(b.name));
+  return DirectorySkillLoadResult(skills: skills, errors: errors);
+}
+
+SystemPromptPart? buildDirectorySkillsSystemPrompt(
+  List<DirectorySkillMetadata> skills, {
+  bool javaScriptExecutionEnabled = false,
+}) {
+  if (skills.isEmpty) return null;
+
+  final lines = <String>[];
+  lines.add("## Skills");
+  lines.add(
+    "A skill is a set of local instructions to follow that is stored in a `SKILL.md` file. Below is the list of skills that can be used. Each entry includes a name, description, and file path so you can open the source for full instructions when using a specific skill.",
+  );
+  lines.add("### Available skills");
+  for (final skill in skills) {
+    lines.add(
+      "- ${skill.name}: ${skill.description} (file: ${skill.pathToSkillMd})",
+    );
+  }
+  lines.add("### How to use skills");
+  lines.add(
+    "- Discovery: The list above is the skills available in this session (name + description + file path). Skill bodies live on disk at the listed paths.\n"
+    "- Trigger rules: If the user names a skill (with `\$SkillName` or plain text) OR the task clearly matches a skill's description shown above, you must use that skill for that turn. Multiple mentions mean use them all.\n"
+    "- Missing/blocked: If a named skill isn't in the list or the path can't be read, say so briefly and continue with the best fallback.\n"
+    "- How to use a skill (progressive disclosure):\n"
+    "  1) After deciding to use a skill, open its `SKILL.md`. Read only enough to follow the workflow.\n"
+    "  2) When `SKILL.md` references relative paths (e.g., `references/foo.md`), resolve them relative to the skill directory listed above first, and only consider other paths if needed.\n"
+    "  3) If `SKILL.md` points to extra folders such as `references/`, load only the specific files needed for the request; don't bulk-load everything.\n"
+    "  4) If `assets/` or templates exist, reuse them instead of recreating from scratch.\n"
+    "${javaScriptExecutionEnabled ? "  5) If `SKILL.md` references JavaScript scripts (`.js`), use `RunJavaScript` to execute them with minimal arguments and verify outputs.\\n" : ""}"
+    "- Coordination and sequencing:\n"
+    "  - If multiple skills apply, choose the minimal set that covers the request and state the order you'll use them.\n"
+    "  - Announce which skill(s) you're using and why (one short line). If you skip an obvious skill, say why.\n"
+    "- Context hygiene:\n"
+    "  - Keep context small: summarize long sections instead of pasting them; only load extra files when needed.\n"
+    "  - Avoid deep reference-chasing: prefer opening only files directly linked from `SKILL.md` unless you're blocked.\n"
+    "  - When variants exist (frameworks, providers, domains), pick only the relevant reference file(s) and note that choice.\n"
+    "- Safety and fallback: If a skill can't be applied cleanly (missing files, unclear instructions), state the issue, pick the next-best approach, and continue.",
+  );
+  final body = lines.join('\n');
+  return SystemPromptPart(
+    name: "directory_skills",
+    content: "<skills_instructions>\n$body\n</skills_instructions>",
+  );
+}
+
+List<DirectorySkillMetadata> collectExplicitDirectorySkillMentions(
+  List<LLMMessage> messages,
+  List<DirectorySkillMetadata> skills,
+) {
+  if (skills.isEmpty || messages.isEmpty) return const [];
+
+  final mentionedNames = <String>{};
+  final mentionedPaths = <String>{};
+
+  for (final message in messages) {
+    if (message is! UserMessage) continue;
+    for (final part in message.contents) {
+      if (part is! TextPart) continue;
+      final text = part.text;
+      for (final match in RegExp(
+        r'\[\$([A-Za-z0-9_:\-]+)\]\(([^)]+)\)',
+      ).allMatches(text)) {
+        final name = match.group(1);
+        final path = match.group(2);
+        if (name != null && name.isNotEmpty) mentionedNames.add(name);
+        if (path != null && path.trim().isNotEmpty) {
+          mentionedPaths.add(_normalizePath(path.trim()));
+        }
+      }
+      for (final match in RegExp(r'\$([A-Za-z0-9_:\-]+)').allMatches(text)) {
+        final name = match.group(1);
+        if (name != null && name.isNotEmpty) mentionedNames.add(name);
+      }
+    }
+  }
+
+  if (mentionedNames.isEmpty && mentionedPaths.isEmpty) return const [];
+
+  final nameCounts = <String, int>{};
+  for (final skill in skills) {
+    nameCounts.update(skill.name, (value) => value + 1, ifAbsent: () => 1);
+  }
+
+  final selected = <DirectorySkillMetadata>[];
+  final selectedPaths = <String>{};
+
+  for (final skill in skills) {
+    final path = _normalizePath(skill.pathToSkillMd);
+    if (mentionedPaths.contains(path) ||
+        mentionedPaths.contains('skill://$path')) {
+      if (selectedPaths.add(path)) selected.add(skill);
+    }
+  }
+
+  for (final skill in skills) {
+    final path = _normalizePath(skill.pathToSkillMd);
+    if (!mentionedNames.contains(skill.name)) continue;
+    if ((nameCounts[skill.name] ?? 0) != 1) continue;
+    if (selectedPaths.add(path)) selected.add(skill);
+  }
+
+  // Codex-style fallback: allow plain-text skill-name references even without
+  // `$skill_name` syntax when the match is unambiguous.
+  for (final message in messages) {
+    if (message is! UserMessage) continue;
+    for (final part in message.contents) {
+      if (part is! TextPart) continue;
+      final text = part.text;
+      for (final skill in skills) {
+        final path = _normalizePath(skill.pathToSkillMd);
+        if ((nameCounts[skill.name] ?? 0) != 1) continue;
+        if (!_textContainsSkillName(text, skill.name)) continue;
+        if (selectedPaths.add(path)) selected.add(skill);
+      }
+    }
+  }
+
+  return selected;
+}
+
+Future<DirectorySkillInjections> buildDirectorySkillInjections(
+  List<DirectorySkillMetadata> mentionedSkills,
+) async {
+  if (mentionedSkills.isEmpty) {
+    return DirectorySkillInjections(items: const [], warnings: const []);
+  }
+
+  final items = <UserMessage>[];
+  final warnings = <String>[];
+  for (final skill in mentionedSkills) {
+    try {
+      final content = await File(skill.pathToSkillMd).readAsString();
+      final payload =
+          "<skill>\n"
+          "<name>${skill.name}</name>\n"
+          "<path>${skill.pathToSkillMd}</path>\n"
+          "$content\n"
+          "</skill>";
+      items.add(
+        UserMessage.text(
+          payload,
+          metadata: {
+            "type": "skill_instructions",
+            "skill_name": skill.name,
+            "skill_path": skill.pathToSkillMd,
+          },
+        ),
+      );
+    } catch (e) {
+      warnings.add(
+        "Failed to load skill ${skill.name} at ${skill.pathToSkillMd}: $e",
+      );
+    }
+  }
+
+  return DirectorySkillInjections(items: items, warnings: warnings);
+}
+
+Future<DirectorySkillMetadata> _parseDirectorySkillFile(File skillFile) async {
+  final content = await skillFile.readAsString();
+  final frontmatter = _extractFrontmatter(content);
+  if (frontmatter == null) {
+    throw Exception('missing YAML frontmatter delimited by ---');
+  }
+  final parsed = _parseSimpleFrontmatter(frontmatter);
+  final path = _normalizePath(skillFile.absolute.path);
+  final fallbackName = _basename(_parentDir(path));
+  final name = (parsed['name'] ?? fallbackName).trim();
+  if (name.isEmpty) {
+    throw Exception('missing skill name');
+  }
+  final description = (parsed['description'] ?? '').trim();
+  if (description.isEmpty) {
+    throw Exception('missing skill description');
+  }
+  return DirectorySkillMetadata(
+    name: name,
+    description: description,
+    pathToSkillMd: path,
+  );
+}
+
+String? _extractFrontmatter(String content) {
+  final lines = const LineSplitter().convert(content);
+  if (lines.isEmpty) return null;
+  if (lines.first.trim() != '---') return null;
+  final buffer = StringBuffer();
+  for (var i = 1; i < lines.length; i++) {
+    final line = lines[i];
+    if (line.trim() == '---') {
+      return buffer.isEmpty ? null : buffer.toString();
+    }
+    buffer.writeln(line);
+  }
+  return null;
+}
+
+Map<String, String> _parseSimpleFrontmatter(String frontmatter) {
+  final out = <String, String>{};
+  for (final rawLine in const LineSplitter().convert(frontmatter)) {
+    final line = rawLine.trimRight();
+    if (line.trim().isEmpty || line.trimLeft().startsWith('#')) continue;
+    final idx = line.indexOf(':');
+    if (idx <= 0) continue;
+    final key = line.substring(0, idx).trim();
+    var value = line.substring(idx + 1).trim();
+    value = _stripWrappingQuotes(value);
+    if (key.isNotEmpty && value.isNotEmpty) {
+      out[key] = value;
+    }
+  }
+  return out;
+}
+
+String _stripWrappingQuotes(String value) {
+  if (value.length >= 2 &&
+      ((value.startsWith('"') && value.endsWith('"')) ||
+          (value.startsWith("'") && value.endsWith("'")))) {
+    return value.substring(1, value.length - 1);
+  }
+  return value;
+}
+
+bool _textContainsSkillName(String text, String skillName) {
+  final escaped = RegExp.escape(skillName);
+  final pattern = RegExp(
+    '(^|[^A-Za-z0-9_:\\-])$escaped([^A-Za-z0-9_:\\-]|\\\$)',
+  );
+  return pattern.hasMatch(text);
+}
+
+String _normalizePath(String path) {
+  if (path.startsWith('skill://')) {
+    path = path.substring('skill://'.length);
+  }
+  return path.replaceAll('\\', '/');
+}
+
+String _basename(String path) {
+  final normalized = path.replaceAll('\\', '/');
+  final parts = normalized.split('/');
+  return parts.isEmpty ? normalized : parts.last;
+}
+
+String _parentDir(String path) {
+  final normalized = path.replaceAll('\\', '/');
+  final idx = normalized.lastIndexOf('/');
+  if (idx <= 0) return normalized;
+  return normalized.substring(0, idx);
+}
+
+int _relativeDepth(String root, String path) {
+  final normalizedRoot = root.replaceAll('\\', '/');
+  final normalizedPath = path.replaceAll('\\', '/');
+  if (!normalizedPath.startsWith(normalizedRoot)) return 0;
+  final rootSegments = normalizedRoot
+      .split('/')
+      .where((e) => e.isNotEmpty)
+      .length;
+  final pathSegments = normalizedPath
+      .split('/')
+      .where((e) => e.isNotEmpty)
+      .length;
+  return pathSegments - rootSegments;
 }
