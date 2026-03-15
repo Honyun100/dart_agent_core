@@ -1,6 +1,8 @@
-/// Support for doing something awesome.
+/// A mobile-first, local-first Dart library for building stateful, tool-using AI agents
+/// with multi-provider LLM support (OpenAI, Gemini, AWS Bedrock).
 ///
-/// More dartdocs go here.
+/// This library provides a unified interface for interacting with various LLMs,
+/// managing agent state, handling tool calls, and maintaining conversation history.
 library;
 
 export 'src/core/message.dart';
@@ -12,6 +14,7 @@ export 'src/llm/openai_client.dart';
 export 'src/llm/gemini_client.dart';
 export 'src/llm/responses_client.dart';
 export 'src/llm/bedrock_claude_client.dart';
+export 'src/llm/claude_client.dart';
 
 export 'src/agent/state_storage.dart';
 export 'src/agent/file_state_storage.dart';

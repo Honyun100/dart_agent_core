@@ -2,7 +2,9 @@
 
 # Dart Agent Core
 
-**A Dart library for building stateful, tool-using AI agents**
+**A mobile-first, local-first Dart library for building stateful, tool-using AI agents**
+
+[English](README.md) | [简体中文](README.zh-CN.md)
 
 [![Pub Version](https://img.shields.io/pub/v/dart_agent_core?color=blue&style=flat-square)](https://pub.dev/packages/dart_agent_core)
 [![License: MIT](https://img.shields.io/badge/license-MIT-purple.svg?style=flat-square)](LICENSE)
@@ -10,7 +12,7 @@
 
 </div>
 
-`dart_agent_core` is a Dart library that implements an agentic loop with tool use, state persistence, and multi-turn memory. It connects to LLM APIs (OpenAI, Gemini, AWS Bedrock) and handles the orchestration layer — tool calling, streaming, context management, and sub-agent delegation — entirely in Dart, which makes it suitable for use in Flutter apps without a Python or Node.js backend.
+`dart_agent_core` is a mobile-first, local-first Dart library that implements an agentic loop with tool use, state persistence, and multi-turn memory. It connects to LLM APIs (OpenAI, Gemini, AWS Bedrock) and handles the orchestration layer — tool calling, streaming, context management, and sub-agent delegation — entirely in Dart, which makes it suitable for use in Flutter apps without a Python or Node.js backend.
 
 ---
 
@@ -35,7 +37,7 @@
 
 ```yaml
 dependencies:
-  dart_agent_core: ^1.0.0
+  dart_agent_core: ^1.0.3
 ```
 
 ---
@@ -130,7 +132,7 @@ final client = BedrockClaudeClient(
 );
 ```
 
-All clients support HTTP proxies via `proxyUrl` and configurable retry/timeout parameters. See [Providers docs](docs/providers.md) for details.
+All clients support HTTP proxies via `proxyUrl` and configurable retry/timeout parameters. See [Providers doc](doc/providers.md) for details.
 
 ---
 
@@ -177,7 +179,7 @@ Future<AgentToolResult> generateChart(String query) async {
 }
 ```
 
-See [Tools & Planning docs](docs/tools_and_planning.md) for positional/named parameter mapping, async tools, and more.
+See [Tools & Planning doc](doc/tools_and_planning.md) for positional/named parameter mapping, async tools, and more.
 
 ---
 
@@ -231,6 +233,7 @@ final agent = StatefulAgent(
 ```
 
 The agent uses the built-in `delegate_task` tool to dispatch work:
+
 - `assignee: 'clone'` — creates a copy of the current agent with clean context.
 - `assignee: 'researcher'` — uses a registered named sub-agent.
 
@@ -354,27 +357,27 @@ final agent = StatefulAgent(
 
 ## Examples
 
-See the [`examples/`](examples) directory:
+See the [`example/`](example) directory:
 
-- [Basic agent with tool use](examples/simple_agent_example.dart)
-- [Streaming responses](examples/simple_agent_stream_example.dart)
-- [Persistent state across sessions](examples/simple_agent_with_state_example.dart)
-- [Planning with write_todos](examples/simple_agent_with_plan_example.dart)
-- [Dynamic skill system](examples/simple_agent_with_skills_example.dart)
-- [Sub-agent delegation](examples/simple_agent_with_sub_agent_example.dart)
-- [Controller hooks (observe & block)](examples/simple_agent_with_controller_example.dart)
-- [Claude extended thinking via Bedrock](examples/simple_agent_with_thinking_example.dart)
-- [Gemini](examples/simple_agent_with_gemini_example.dart)
-- [OpenAI](examples/simple_agent_with_openai_example.dart)
+- [Basic agent with tool use](example/simple_agent_example.dart)
+- [Streaming responses](example/simple_agent_stream_example.dart)
+- [Persistent state across sessions](example/simple_agent_with_state_example.dart)
+- [Planning with write_todos](example/simple_agent_with_plan_example.dart)
+- [Dynamic skill system](example/simple_agent_with_skills_example.dart)
+- [Sub-agent delegation](example/simple_agent_with_sub_agent_example.dart)
+- [Controller hooks (observe & block)](example/simple_agent_with_controller_example.dart)
+- [Claude extended thinking via Bedrock](example/simple_agent_with_thinking_example.dart)
+- [Gemini](example/simple_agent_with_gemini_example.dart)
+- [OpenAI](example/simple_agent_with_openai_example.dart)
 
 ---
 
 ## Documentation
 
-- [Architecture & Lifecycle](docs/architecture.md) — Agent loop, streaming events, controller hooks, loop detection, cancellation
-- [LLM Providers & Configuration](docs/providers.md) — OpenAI, Gemini, Bedrock setup, ModelConfig, proxy support
-- [Tools & Planning](docs/tools_and_planning.md) — Tool creation, parameter mapping, AgentToolResult, skills, sub-agents, planner
-- [State & Memory Management](docs/state_and_memory.md) — AgentState, FileStateStorage, context compression, episodic memory
+- [Architecture & Lifecycle](doc/architecture.md) — Agent loop, streaming events, controller hooks, loop detection, cancellation
+- [LLM Providers & Configuration](doc/providers.md) — OpenAI, Gemini, Bedrock setup, ModelConfig, proxy support
+- [Tools & Planning](doc/tools_and_planning.md) — Tool creation, parameter mapping, AgentToolResult, skills, sub-agents, planner
+- [State & Memory Management](doc/state_and_memory.md) — AgentState, FileStateStorage, context compression, episodic memory
 
 ---
 
