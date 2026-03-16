@@ -362,10 +362,7 @@ Map<String, dynamic> _createRequestBody(
               (fc) => {
                 'id': fc.id,
                 'type': 'function',
-                'function': {
-                  'name': fc.name,
-                  'arguments': jsonEncode(fc.arguments),
-                },
+                'function': {'name': fc.name, 'arguments': fc.arguments},
               },
             )
             .toList();
@@ -637,6 +634,40 @@ class OpenAIResponseTransformer
           originalUsage: u,
           model: modelConfig.model,
         );
+
+        // Some providers (e.g. GLM) send finish_reason and usage in the same
+        // chunk. Extract finish_reason from choices if present so it is not lost.
+        final usageChoices = data['choices'] as List? ?? [];
+        if (usageChoices.isNotEmpty) {
+          final usageChoice = usageChoices[0];
+          final inlineFinishReason = usageChoice['finish_reason'];
+          if (inlineFinishReason != null) {
+            pendingFinishReason = inlineFinishReason;
+          }
+          // Also accumulate any tool_calls in this chunk
+          final usageDelta = usageChoice['delta'];
+          if (usageDelta != null && usageDelta['tool_calls'] != null) {
+            final toolCalls = usageDelta['tool_calls'] as List;
+            for (final tc in toolCalls) {
+              final index = tc['index'] as int;
+              if (!toolCallBuffer.containsKey(index)) {
+                toolCallBuffer[index] = {'id': '', 'name': '', 'arguments': ''};
+              }
+              final buffer = toolCallBuffer[index]!;
+              if (tc['id'] != null) buffer['id'] = tc['id'];
+              final fn = tc['function'];
+              if (fn != null) {
+                if (fn['name'] != null) {
+                  buffer['name'] = (buffer['name'] as String) + fn['name'];
+                }
+                if (fn['arguments'] != null) {
+                  buffer['arguments'] =
+                      (buffer['arguments'] as String) + fn['arguments'];
+                }
+              }
+            }
+          }
+        }
 
         // If we have a pending finish reason, yield it now combined with usage
         if (pendingFinishReason != null) {

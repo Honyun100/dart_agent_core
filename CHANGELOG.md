@@ -1,3 +1,9 @@
+## 1.0.5
+
+- Add examples for MiniMax, Kimi, Volcengine Seed, Zhipu GLM, and Qwen via OpenAI-compatible API.
+- Fix `OpenAIResponseTransformer` not extracting `finish_reason` when provider sends it in the same chunk as `usage` (e.g. GLM).
+- Fix double JSON encoding of `FunctionCall.arguments` in `OpenAIClient` request body.
+
 ## 1.0.4
 
 - Add `DirectorySkill` support: load skills from `SKILL.md` files in a directory tree with automatic discovery and system prompt injection.
@@ -6,7 +12,7 @@
 - Add `simple_agent_with_directory_skills_example.dart` example.
 - Update README documentation.
 
-## 1.0.4
+## 1.0.3
 
 - Add `maxTurns` protection to `StatefulAgent` to prevent potential infinite loops.
 - Add internal retry limit for empty model responses/stop reasons in `runStream`.
