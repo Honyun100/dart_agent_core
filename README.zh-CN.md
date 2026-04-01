@@ -18,7 +18,7 @@
 
 ## 特性
 
-- **多 Provider 支持**：提供统一的 `LLMClient` 接口，支持 OpenAI（Chat Completions 与 Responses API）、Google Gemini，以及通过 AWS Bedrock 调用 Anthropic Claude。
+- **多 Provider 支持**：提供统一的 `LLMClient` 接口，内置支持 OpenAI（Chat Completions 与 Responses API）、Google Gemini、Anthropic Claude（直连与 AWS Bedrock）。同时，由于大量国产大模型兼容 OpenAI API，可通过 `OpenAIClient` 直接接入 Kimi、通义千问、智谱 GLM、Ollama 等；通过 `ResponsesClient` 接入火山引擎豆包；通过 `ClaudeClient` 接入 MiniMax。
 - **工具调用**：将任意 Dart 函数封装为带 JSON Schema 的工具。Agent 会自动发起调用、回填结果并循环执行直到任务完成。工具可返回 `AgentToolResult`，携带多模态内容、元数据或停止信号。
 - **多模态输入**：`UserMessage` 支持文本、图片、音频、视频和文档等内容片段。模型输出可包含文本、图片、视频和音频。
 - **有状态会话**：`AgentState` 追踪对话历史、Token 使用量、激活技能、计划与自定义元数据。`FileStateStorage` 可将状态以 JSON 持久化到磁盘。
@@ -38,7 +38,7 @@
 
 ```yaml
 dependencies:
-  dart_agent_core: ^1.0.5
+  dart_agent_core: ^1.0.6
 ```
 
 ---
@@ -93,13 +93,17 @@ void main() async {
 
 ## 支持的 Provider
 
+`dart_agent_core` 通过统一的 `LLMClient` 接口屏蔽了不同 LLM 提供商的差异。只需初始化对应的客户端，传给 `StatefulAgent` 即可。
+
+由于大量国产大模型都兼容 OpenAI Chat Completions API，你可以直接用 `OpenAIClient` 修改 `baseUrl` 来接入。
+
 ### OpenAI（Chat Completions）
 
 ```dart
 final client = OpenAIClient(
   apiKey: Platform.environment['OPENAI_API_KEY'] ?? '',
-  // baseUrl defaults to 'https://api.openai.com'
-  // Override for Azure OpenAI or compatible proxies
+  // baseUrl 默认为 'https://api.openai.com'
+  // 可覆盖为 Azure OpenAI 或兼容代理地址
 );
 ```
 
@@ -121,6 +125,16 @@ final client = GeminiClient(
 );
 ```
 
+### Anthropic Claude（直连）
+
+直接调用 Anthropic Messages API，无需 AWS Bedrock。
+
+```dart
+final client = ClaudeClient(
+  apiKey: Platform.environment['ANTHROPIC_API_KEY'] ?? '',
+);
+```
+
 ### AWS Bedrock（Claude）
 
 通过 AWS Signature V4 鉴权，而不是简单 API Key。
@@ -133,7 +147,91 @@ final client = BedrockClaudeClient(
 );
 ```
 
-所有客户端都支持通过 `proxyUrl` 配置 HTTP 代理，并可设置重试和超时参数。详见 [Providers 文档](docs/providers.md)。
+### Kimi（Moonshot AI）
+
+Kimi 兼容 OpenAI Chat Completions API，直接用 `OpenAIClient` 指向 Kimi 的 baseUrl。支持 `kimi-k2`、`kimi-k2-thinking` 等模型。thinking 模型的 `reasoning_content` 会自动处理。
+
+```dart
+final client = OpenAIClient(
+  apiKey: Platform.environment['MOONSHOT_API_KEY'] ?? '',
+  baseUrl: 'https://api.moonshot.cn/v1',
+);
+final config = ModelConfig(model: 'kimi-k2');
+```
+
+### 通义千问（Qwen）
+
+阿里云 DashScope 兼容 OpenAI API。
+
+```dart
+final client = OpenAIClient(
+  apiKey: Platform.environment['DASHSCOPE_API_KEY'] ?? '',
+  baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+);
+final config = ModelConfig(model: 'qwen3.5-plus');
+```
+
+### 智谱 GLM
+
+智谱 GLM 兼容 OpenAI API。
+
+```dart
+final client = OpenAIClient(
+  apiKey: Platform.environment['GLM_API_KEY'] ?? '',
+  baseUrl: 'https://open.bigmodel.cn/api/coding/paas/v4',
+);
+final config = ModelConfig(model: 'GLM-4.7');
+```
+
+### 火山引擎豆包（Doubao-Seed）
+
+豆包兼容 OpenAI Responses API，使用 `ResponsesClient`。
+
+```dart
+final client = ResponsesClient(
+  apiKey: Platform.environment['ARK_API_KEY'] ?? '',
+  baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
+);
+final config = ModelConfig(model: 'doubao-seed-1-8-251228');
+```
+
+### MiniMax
+
+MiniMax 兼容 Anthropic API 格式，使用 `ClaudeClient`。
+
+```dart
+final client = ClaudeClient(
+  apiKey: Platform.environment['MINIMAX_API_KEY'] ?? '',
+  baseUrl: 'https://api.minimaxi.com/anthropic',
+);
+final config = ModelConfig(model: 'MiniMax-M2.5');
+```
+
+### Ollama（本地部署）
+
+Ollama 在本地暴露 OpenAI 兼容 API，无需 API Key。
+
+```dart
+final client = OpenAIClient(
+  apiKey: '', // Ollama 不需要 API Key
+  baseUrl: 'http://localhost:11434/v1',
+);
+final config = ModelConfig(model: 'qwen2.5:7b');
+```
+
+### OpenRouter
+
+OpenRouter 聚合了多家模型，兼容 OpenAI API。
+
+```dart
+final client = OpenAIClient(
+  apiKey: Platform.environment['OPENROUTER_API_KEY'] ?? '',
+  baseUrl: 'https://openrouter.ai/api/v1',
+);
+final config = ModelConfig(model: 'anthropic/claude-opus-4.6');
+```
+
+所有客户端都支持通过 `proxyUrl` 配置 HTTP 代理，并可设置重试和超时参数。详见 [Providers 文档](doc/providers.md)。
 
 ---
 
@@ -180,7 +278,7 @@ Future<AgentToolResult> generateChart(String query) async {
 }
 ```
 
-关于位置参数/命名参数映射、异步工具等细节，见 [Tools & Planning 文档](docs/tools_and_planning.md)。
+关于位置参数/命名参数映射、异步工具等细节，见 [Tools & Planning 文档](doc/tools_and_planning.md)。
 
 ---
 
@@ -426,28 +524,37 @@ final agent = StatefulAgent(
 
 ## 示例
 
-查看 [`examples/`](examples) 目录：
+查看 [`example/`](example) 目录：
 
-- [基础工具调用 Agent](examples/simple_agent_example.dart)
-- [流式响应](examples/simple_agent_stream_example.dart)
-- [跨会话状态持久化](examples/simple_agent_with_state_example.dart)
-- [使用 write_todos 做规划](examples/simple_agent_with_plan_example.dart)
-- [动态技能系统](examples/simple_agent_with_skills_example.dart)
-- [基于文件的 Skill + JavaScript 脚本执行](examples/simple_agent_with_directory_skills_example.dart)
-- [子 Agent 委派](examples/simple_agent_with_sub_agent_example.dart)
-- [控制器钩子（观测与拦截）](examples/simple_agent_with_controller_example.dart)
-- [Bedrock 下的 Claude Extended Thinking](examples/simple_agent_with_thinking_example.dart)
-- [Gemini](examples/simple_agent_with_gemini_example.dart)
-- [OpenAI](examples/simple_agent_with_openai_example.dart)
+- [基础工具调用 Agent](example/simple_agent_example.dart)
+- [流式响应](example/simple_agent_stream_example.dart)
+- [跨会话状态持久化](example/simple_agent_with_state_example.dart)
+- [使用 write_todos 做规划](example/simple_agent_with_plan_example.dart)
+- [动态技能系统](example/simple_agent_with_skills_example.dart)
+- [基于文件的 Skill + JavaScript 脚本执行](example/simple_agent_with_directory_skills_example.dart)
+- [子 Agent 委派](example/simple_agent_with_sub_agent_example.dart)
+- [控制器钩子（观测与拦截）](example/simple_agent_with_controller_example.dart)
+- [Bedrock 下的 Claude Extended Thinking](example/simple_agent_with_thinking_example.dart)
+- [OpenAI](example/simple_agent_with_openai_example.dart)
+- [Gemini](example/simple_agent_with_gemini_example.dart)
+- [Claude（直连 Anthropic）](example/simple_agent_with_claude_example.dart)
+- [Kimi（Moonshot AI）](example/simple_agent_with_kimi_example.dart)
+- [Kimi 图片分析](example/simple_agent_with_kimi_vision_example.dart)
+- [通义千问（Qwen）](example/simple_agent_with_qwen_example.dart)
+- [智谱 GLM](example/simple_agent_with_glm_example.dart)
+- [火山引擎豆包（Seed）](example/simple_agent_with_seed_example.dart)
+- [MiniMax](example/simple_agent_with_minimax_example.dart)
+- [Ollama（本地部署）](example/simple_agent_with_ollama_example.dart)
+- [OpenRouter](example/simple_agent_with_openrouter_example.dart)
 
 ---
 
 ## 文档
 
-- [架构与生命周期](docs/architecture.md) — Agent 循环、流式事件、控制器钩子、循环检测、取消机制
-- [LLM Provider 与配置](docs/providers.md) — OpenAI、Gemini、Bedrock 配置，ModelConfig，代理支持
-- [工具与规划](docs/tools_and_planning.md) — 工具创建、参数映射、AgentToolResult、技能、子 Agent、规划器
-- [状态与记忆管理](docs/state_and_memory.md) — AgentState、FileStateStorage、上下文压缩、情节记忆
+- [架构与生命周期](doc/architecture.md) — Agent 循环、流式事件、控制器钩子、循环检测、取消机制
+- [LLM Provider 与配置](doc/providers.md) — OpenAI、Gemini、Bedrock、Claude、Kimi、Qwen、GLM 等配置，ModelConfig，代理支持
+- [工具与规划](doc/tools_and_planning.md) — 工具创建、参数映射、AgentToolResult、技能、子 Agent、规划器
+- [状态与记忆管理](doc/state_and_memory.md) — AgentState、FileStateStorage、上下文压缩、情节记忆
 
 ---
 

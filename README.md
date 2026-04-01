@@ -38,7 +38,7 @@
 
 ```yaml
 dependencies:
-  dart_agent_core: ^1.0.5
+  dart_agent_core: ^1.0.6
 ```
 
 ---
@@ -437,8 +437,17 @@ See the [`example/`](example) directory:
 - [Sub-agent delegation](example/simple_agent_with_sub_agent_example.dart)
 - [Controller hooks (observe & block)](example/simple_agent_with_controller_example.dart)
 - [Claude extended thinking via Bedrock](example/simple_agent_with_thinking_example.dart)
-- [Gemini](example/simple_agent_with_gemini_example.dart)
 - [OpenAI](example/simple_agent_with_openai_example.dart)
+- [Gemini](example/simple_agent_with_gemini_example.dart)
+- [Claude (direct Anthropic API)](example/simple_agent_with_claude_example.dart)
+- [Kimi (Moonshot AI)](example/simple_agent_with_kimi_example.dart)
+- [Kimi vision (image analysis)](example/simple_agent_with_kimi_vision_example.dart)
+- [Qwen (Alibaba DashScope)](example/simple_agent_with_qwen_example.dart)
+- [Zhipu GLM](example/simple_agent_with_glm_example.dart)
+- [Volcengine Doubao-Seed](example/simple_agent_with_seed_example.dart)
+- [MiniMax](example/simple_agent_with_minimax_example.dart)
+- [Ollama (local)](example/simple_agent_with_ollama_example.dart)
+- [OpenRouter](example/simple_agent_with_openrouter_example.dart)
 
 ---
 

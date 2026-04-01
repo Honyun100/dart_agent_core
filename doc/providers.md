@@ -123,3 +123,110 @@ final client = OpenAIClient(
   proxyUrl: 'http://user:password@proxy.example.com:8080',
 );
 ```
+
+---
+
+## OpenAI-Compatible Providers
+
+Many LLM providers expose an OpenAI-compatible Chat Completions API. You can use `OpenAIClient` with a custom `baseUrl` to connect to them.
+
+### Kimi (Moonshot AI)
+
+```dart
+final client = OpenAIClient(
+  apiKey: Platform.environment['MOONSHOT_API_KEY'] ?? '',
+  baseUrl: 'https://api.moonshot.cn/v1',
+);
+final config = ModelConfig(model: 'kimi-k2');
+// For thinking models: ModelConfig(model: 'kimi-k2-thinking')
+// reasoning_content is handled automatically
+```
+
+### Qwen (Alibaba DashScope)
+
+```dart
+final client = OpenAIClient(
+  apiKey: Platform.environment['DASHSCOPE_API_KEY'] ?? '',
+  baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+);
+final config = ModelConfig(model: 'qwen3.5-plus');
+```
+
+### Zhipu GLM
+
+```dart
+final client = OpenAIClient(
+  apiKey: Platform.environment['GLM_API_KEY'] ?? '',
+  baseUrl: 'https://open.bigmodel.cn/api/coding/paas/v4',
+);
+final config = ModelConfig(model: 'GLM-4.7');
+```
+
+### Ollama (Local)
+
+```dart
+final client = OpenAIClient(
+  apiKey: '', // no key required
+  baseUrl: 'http://localhost:11434/v1',
+);
+final config = ModelConfig(model: 'qwen2.5:7b');
+```
+
+### OpenRouter
+
+```dart
+final client = OpenAIClient(
+  apiKey: Platform.environment['OPENROUTER_API_KEY'] ?? '',
+  baseUrl: 'https://openrouter.ai/api/v1',
+);
+final config = ModelConfig(model: 'anthropic/claude-opus-4.6');
+```
+
+---
+
+## Responses API-Compatible Providers
+
+### Volcengine Doubao-Seed
+
+```dart
+final client = ResponsesClient(
+  apiKey: Platform.environment['ARK_API_KEY'] ?? '',
+  baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
+);
+final config = ModelConfig(model: 'doubao-seed-1-8-251228');
+```
+
+---
+
+## Anthropic API-Compatible Providers
+
+### Anthropic Claude (Direct)
+
+```dart
+final client = ClaudeClient(
+  apiKey: Platform.environment['ANTHROPIC_API_KEY'] ?? '',
+);
+final config = ModelConfig(model: 'claude-sonnet-4-20250514');
+```
+
+### MiniMax
+
+MiniMax exposes an Anthropic-compatible API endpoint.
+
+```dart
+final client = ClaudeClient(
+  apiKey: Platform.environment['MINIMAX_API_KEY'] ?? '',
+  baseUrl: 'https://api.minimaxi.com/anthropic',
+);
+final config = ModelConfig(model: 'MiniMax-M2.5');
+```
+
+---
+
+## Thinking / Reasoning Models
+
+Models that support extended thinking (e.g. `kimi-k2-thinking`, `o1`, `o3`, `deepseek-r1`) return a `reasoning_content` field in their responses. The framework handles this automatically:
+
+- Streaming and non-streaming responses parse `reasoning_content` into `ModelMessage.thought`.
+- Multi-turn conversations re-send `reasoning_content` in assistant messages as required by the API.
+- Access the thinking content via `modelMessage.thought`.
