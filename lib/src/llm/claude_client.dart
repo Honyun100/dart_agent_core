@@ -46,10 +46,10 @@ class ClaudeClient extends LLMClient {
   }
 
   Map<String, String> get _headers => {
-        'x-api-key': apiKey,
-        'anthropic-version': anthropicVersion,
-        'content-type': 'application/json',
-      };
+    'x-api-key': apiKey,
+    'anthropic-version': anthropicVersion,
+    'content-type': 'application/json',
+  };
 
   Future<void> _waitForRetry(int retryCount, String reason) async {
     int delay = initialRetryDelayMs * (1 << retryCount);
@@ -84,7 +84,7 @@ class ClaudeClient extends LLMClient {
     while (true) {
       try {
         _logger.info(
-          'Sending request to Claude API, timeout: ${timeout.inSeconds}s, proxy: ${proxyUrl ?? 'none'}, messages: ${messages.length}, tools: ${tools?.length}, model: ${modelConfig.model}',
+          'Sending request to Claude API, baseUrl: $baseUrl, timeout: ${timeout.inSeconds}s, proxy: ${proxyUrl ?? 'none'}, messages: ${messages.length}, tools: ${tools?.length}, model: ${modelConfig.model}',
         );
         final startTime = DateTime.now();
         final response = await _client.post(
@@ -118,9 +118,7 @@ class ClaudeClient extends LLMClient {
         }
 
         final errorMsg = response.data.toString();
-        throw Exception(
-          'Claude API Error: ${response.statusCode} $errorMsg',
-        );
+        throw Exception('Claude API Error: ${response.statusCode} $errorMsg');
       } on DioException catch (e) {
         if (retryCount < maxRetries) {
           await _waitForRetry(retryCount, 'DioException: ${e.message}');
@@ -158,7 +156,7 @@ class ClaudeClient extends LLMClient {
     while (true) {
       try {
         _logger.info(
-          'Sending streaming request to Claude API, timeout: ${timeout.inSeconds}s, proxy: ${proxyUrl ?? 'none'}, messages: ${messages.length}, tools: ${tools?.length}, model: ${modelConfig.model}',
+          'Sending streaming request to Claude API, baseUrl: $baseUrl, timeout: ${timeout.inSeconds}s, proxy: ${proxyUrl ?? 'none'}, messages: ${messages.length}, tools: ${tools?.length}, model: ${modelConfig.model}',
         );
         final startTime = DateTime.now();
         final response = await _client.post(
@@ -254,9 +252,7 @@ class ClaudeClient extends LLMClient {
                   Exception('Claude Stream Error: ${errorData['message']}'),
                 );
               } catch (_) {
-                controller.addError(
-                  Exception('Claude Stream Error: $line'),
-                );
+                controller.addError(Exception('Claude Stream Error: $line'));
               }
             }
             // Empty lines are SSE event delimiters — ignored
@@ -518,7 +514,8 @@ class ClaudeClient extends LLMClient {
           ? ModelUsage(
               promptTokens: data['usage']['input_tokens'] ?? 0,
               completionTokens: data['usage']['output_tokens'] ?? 0,
-              totalTokens: (data['usage']['input_tokens'] ?? 0) +
+              totalTokens:
+                  (data['usage']['input_tokens'] ?? 0) +
                   (data['usage']['output_tokens'] ?? 0),
               cachedToken:
                   (data['usage']['cache_read_input_tokens'] ?? 0) +

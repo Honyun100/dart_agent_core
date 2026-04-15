@@ -89,7 +89,7 @@ class ResponsesClient extends LLMClient {
     while (true) {
       try {
         _logger.info(
-          'Sending request to OpenAI Responses API (Attempt ${retryCount + 1}), timeout: ${timeout.inSeconds} seconds, proxy:${proxyUrl ?? 'none'} , message length: ${messages.length}, tools: ${tools?.length}, model: ${modelConfig.model}',
+          'Sending request to OpenAI Responses API (Attempt ${retryCount + 1}), baseUrl: $baseUrl, timeout: ${timeout.inSeconds} seconds, proxy:${proxyUrl ?? 'none'} , message length: ${messages.length}, tools: ${tools?.length}, model: ${modelConfig.model}',
         );
         final startTime = DateTime.now();
         final response = await _client.post(
@@ -221,7 +221,7 @@ class ResponsesClient extends LLMClient {
       while (true) {
         try {
           _logger.info(
-            'Sending streaming request to OpenAI Responses API, timeout: ${timeout.inSeconds} seconds, message length: ${messages.length}, tools: ${tools?.length}, model: ${modelConfig.model}',
+            'Sending streaming request to OpenAI Responses API, baseUrl: $baseUrl, timeout: ${timeout.inSeconds} seconds, proxy:${proxyUrl ?? 'none'}, message length: ${messages.length}, tools: ${tools?.length}, model: ${modelConfig.model}',
           );
           final startTime = DateTime.now();
 

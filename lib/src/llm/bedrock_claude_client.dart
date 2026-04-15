@@ -105,7 +105,7 @@ class BedrockClaudeClient extends LLMClient {
     while (true) {
       try {
         _logger.info(
-          'Sending request to Bedrock, timeout: ${timeout.inSeconds} seconds, proxy:${proxyUrl ?? 'none'} ,message length: ${messages.length}, tools: ${tools?.length}, model: ${modelConfig.model}',
+          'Sending request to Bedrock, region: $region, timeout: ${timeout.inSeconds} seconds, proxy:${proxyUrl ?? 'none'} ,message length: ${messages.length}, tools: ${tools?.length}, model: ${modelConfig.model}',
         );
         final startTime = DateTime.now();
         final response = await _client.postUri(
@@ -200,7 +200,7 @@ class BedrockClaudeClient extends LLMClient {
     while (true) {
       try {
         _logger.info(
-          'Sending streaming request to Bedrock, timeout: ${timeout.inSeconds} seconds, proxy:${proxyUrl ?? 'none'} ,message length: ${messages.length}, tools: ${tools?.length}, model: ${modelConfig.model}',
+          'Sending streaming request to Bedrock, region: $region, timeout: ${timeout.inSeconds} seconds, proxy:${proxyUrl ?? 'none'} ,message length: ${messages.length}, tools: ${tools?.length}, model: ${modelConfig.model}',
         );
         final startTime = DateTime.now();
         final response = await _client.postUri(

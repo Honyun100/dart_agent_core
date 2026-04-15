@@ -72,7 +72,7 @@ class GeminiClient extends LLMClient {
     while (true) {
       try {
         _geminiLogger.info(
-          'Sending request to Gemini, timeout: ${timeout.inSeconds} seconds, proxy:${proxyUrl ?? 'none'} ,message length: ${messages.length}, tools: ${tools?.length}, model: $model',
+          'Sending request to Gemini, baseUrl: https://generativelanguage.googleapis.com, timeout: ${timeout.inSeconds} seconds, proxy:${proxyUrl ?? 'none'} ,message length: ${messages.length}, tools: ${tools?.length}, model: $model',
         );
         final startTime = DateTime.now();
         final response = await _client.post(
@@ -182,7 +182,7 @@ class GeminiClient extends LLMClient {
       while (true) {
         try {
           _geminiLogger.info(
-            'Sending streaming request to Gemini, timeout: ${timeout.inSeconds} seconds, proxy:${proxyUrl ?? 'none'} ,message length: ${messages.length}, tools: ${tools?.length}, model: $model',
+            'Sending streaming request to Gemini, baseUrl: https://generativelanguage.googleapis.com, timeout: ${timeout.inSeconds} seconds, proxy:${proxyUrl ?? 'none'} ,message length: ${messages.length}, tools: ${tools?.length}, model: $model',
           );
           final startTime = DateTime.now();
 

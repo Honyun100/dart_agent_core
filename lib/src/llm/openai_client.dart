@@ -73,7 +73,7 @@ class OpenAIClient extends LLMClient {
     while (true) {
       try {
         _logger.info(
-          'Sending request to OpenAI (Attempt ${retryCount + 1}), timeout: ${timeout.inSeconds} seconds, proxy:${proxyUrl ?? 'none'} , message length: ${messages.length}, tools: ${tools?.length}, model: ${modelConfig.model}',
+          'Sending request to OpenAI (Attempt ${retryCount + 1}), baseUrl: $baseUrl, timeout: ${timeout.inSeconds} seconds, proxy:${proxyUrl ?? 'none'} , message length: ${messages.length}, tools: ${tools?.length}, model: ${modelConfig.model}',
         );
         final startTime = DateTime.now();
         final response = await _client.post(
@@ -163,7 +163,7 @@ class OpenAIClient extends LLMClient {
       while (true) {
         try {
           _logger.info(
-            'Sendings streaming request to OpenAI, timeout: ${timeout.inSeconds} seconds, message length: ${messages.length}, tools: ${tools?.length}, model: ${modelConfig.model}',
+            'Sending streaming request to OpenAI, baseUrl: $baseUrl, timeout: ${timeout.inSeconds} seconds, proxy:${proxyUrl ?? 'none'}, message length: ${messages.length}, tools: ${tools?.length}, model: ${modelConfig.model}',
           );
           final startTime = DateTime.now();
 
