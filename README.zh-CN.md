@@ -12,7 +12,7 @@
 
 </div>
 
-`dart_agent_core` 是一个 mobile-first、local-first 的 Dart Agent 框架，实现了包含工具调用、状态持久化与多轮记忆的 agentic loop。它可连接 OpenAI、Gemini、AWS Bedrock 等 LLM API，并将工具编排、流式输出、上下文管理、子 Agent 委派等能力全部放在 Dart 侧，适合直接在 Flutter 应用中使用，而不依赖 Python 或 Node.js 后端。
+`dart_agent_core` 是一个 mobile-first、local-first 的 Dart Agent 框架，实现了包含工具调用、状态持久化、多轮记忆、Skill 系统与上下文压缩的完整 agentic loop。它可连接主流 LLM 提供商（OpenAI、Gemini、Claude 及任何 OpenAI 兼容 API），并将工具编排、流式输出、规划、子 Agent 委派等能力全部放在 Dart 侧，适合直接在 Flutter 应用中使用，而不依赖 Python 或 Node.js 后端。
 
 ---
 

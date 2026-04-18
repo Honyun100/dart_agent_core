@@ -12,7 +12,7 @@
 
 </div>
 
-`dart_agent_core` is a mobile-first, local-first Dart library that implements an agentic loop with tool use, state persistence, and multi-turn memory. It connects to LLM APIs (OpenAI, Gemini, AWS Bedrock) and handles the orchestration layer — tool calling, streaming, context management, and sub-agent delegation — entirely in Dart, which makes it suitable for use in Flutter apps without a Python or Node.js backend.
+`dart_agent_core` is a mobile-first, local-first Dart library that implements a full agentic loop with tool use, state persistence, multi-turn memory, skill system, and context compression. It connects to mainstream LLM providers (OpenAI, Gemini, Claude, and any OpenAI-compatible API) and handles the orchestration layer — tool calling, streaming, planning, sub-agent delegation — entirely in Dart, making it suitable for Flutter apps without a Python or Node.js backend.
 
 ---
 
