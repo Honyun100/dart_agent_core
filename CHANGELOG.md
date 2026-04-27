@@ -1,3 +1,9 @@
+## 1.0.8
+
+- Lower Dart SDK minimum constraint from `^3.10.4` to `^3.9.2` to support Flutter 3.35 and HarmonyOS ecosystem.
+- Add `ToolParameterMode.object` for tools: receive all arguments as a single `Map<String, dynamic>` instead of positional/named parameter mapping via `Function.apply`.
+- Update tool documentation in README, README.zh-CN, and `doc/tools_and_planning.md` with object mode usage and examples.
+
 ## 1.0.7
 
 - Add `baseUrl` / `region` to request log messages across all LLM clients for easier debugging.
